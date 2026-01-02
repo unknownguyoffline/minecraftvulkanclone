@@ -1,1 +1,2 @@
-cd Build && cmake .. && make -j12 && cd - && mv Build/minevulkan . && ./minevulkan
+mkdir -p Build
+cd Build && cmake .. && make -j12 && mv minevulkan ..

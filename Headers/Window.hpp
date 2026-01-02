@@ -7,8 +7,8 @@ struct Input
 {
     struct MouseInput
     {
-        glm::vec2 position = glm::vec2(0);      
-        glm::vec2 offset = glm::vec2(0);      
+        glm::dvec2 position = glm::vec2(0);      
+        glm::dvec2 offset = glm::vec2(0);      
         bool leftPress = false;
         bool rightPress = false;
         bool middlePress = false;
@@ -122,6 +122,7 @@ struct Input
 		bool keyPadDivide = false;
 		bool keyPadMultiply = false;
 		bool keyPadSubtract = false;
+		bool keyPadEqual = false;
 		bool keyPadAdd = false;
 		bool keyPadEnter = false;
 		bool keyLeftShift = false;
@@ -155,27 +156,24 @@ struct WindowUserPointer
     Input input;
 };
 
-struct WindowCreateInfo
-{
-    int width = 800, height = 600;
-    const char* title;
-};
-
 class Window
 {
     public:
         Window() {}
-        Window(const WindowCreateInfo& createInfo);
-
-
-        Input GetInput();
+        Window(int width, int height, const char* title);
+		
+		
+        const Input& GetInput() const;
         glm::uvec2 GetFramebufferSize();
-
+		void CreateWindow(int width, int height, const char* title);
 		GLFWwindow* GetNativeWindow() { return mWindow; }
+
+		void Update();
 
         ~Window();
 
     private:
+		void updateKeyboardInput();
         static uint32_t sWindowCount;
         static bool sGlfwInitialized;
         GLFWwindow* mWindow;

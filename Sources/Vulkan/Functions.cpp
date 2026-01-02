@@ -1,6 +1,5 @@
-#include <Vulkan.hpp>
+#include <Vulkan/Functions.hpp>
 #include <Macros.hpp>
-
 
 
 namespace vkn
@@ -70,6 +69,11 @@ namespace vkn
 
         uint32_t extensionCount;
         const char** extensions = glfwGetRequiredInstanceExtensions(&extensionCount);
+
+        for(int i = 0; i < extensionCount; i++)
+        {
+            std::println("extension: {}", extensions[i]);
+        }
 
         createInfo.ppEnabledExtensionNames = extensions;
         createInfo.enabledExtensionCount = extensionCount;
@@ -574,4 +578,311 @@ namespace vkn
         return fence;
     }
 
+
+
+
+    Buffer CreateBuffer(VkPhysicalDevice physicalDevice, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties)
+    {
+        VkBuffer buffer;
+        VkBufferCreateInfo createInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        createInfo.size = size;
+        createInfo.usage = usage;
+
+
+        vkCreateBuffer(device, &createInfo, nullptr, &buffer);
+        
+        
+        VkMemoryRequirements requirements;
+        vkGetBufferMemoryRequirements(device, buffer, &requirements);
+
+        VkMemoryAllocateInfo allocateInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+        allocateInfo.allocationSize = requirements.size;
+        allocateInfo.memoryTypeIndex = vkn::GetMemoryTypeIndex(physicalDevice, requirements.memoryTypeBits, memoryProperties);
+
+        VkDeviceMemory memory;
+        vkAllocateMemory(device, &allocateInfo, nullptr, &memory);
+
+        vkBindBufferMemory(device, buffer, memory, 0);
+
+        Buffer result;
+        result.handle = buffer;
+        result.memory = memory;
+        result.memoryProperties = memoryProperties;
+        result.size = requirements.size;
+        result.usage = usage;
+        result.bufferSize = size;
+
+        if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+            vkMapMemory(device, memory, 0, requirements.size, 0, &result.map);
+
+        return result;
+
+    }
+
+
+    void DestroyBuffer(VkDevice device, Buffer& buffer)
+    {
+		vkFreeMemory(device, buffer.memory, nullptr);
+        vkDestroyBuffer(device, buffer.handle, nullptr);
+        buffer = Buffer();
+    }
+
+	VkDescriptorSetLayout CreateDescriptorSetLayout(VkDevice device, const std::vector<VkDescriptorSetLayoutBinding>& setLayoutBindings)
+    {
+        VkDescriptorSetLayoutCreateInfo setLayoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        setLayoutCreateInfo.bindingCount = setLayoutBindings.size();
+        setLayoutCreateInfo.pBindings = setLayoutBindings.data();
+
+        VkDescriptorSetLayout setLayout;
+        
+        vkCreateDescriptorSetLayout(device, &setLayoutCreateInfo, nullptr, &setLayout);
+
+        return setLayout;
+    }
+    
+    VkDescriptorPool CreateDescriptorPool(VkDevice device, const std::vector<VkDescriptorPoolSize>& descriptorPools, uint32_t maxSet)
+    {
+        VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+        descriptorPoolCreateInfo.maxSets = maxSet;
+        descriptorPoolCreateInfo.poolSizeCount = descriptorPools.size();
+        descriptorPoolCreateInfo.pPoolSizes = descriptorPools.data();
+
+        VkDescriptorPool descriptorPool;
+        vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, nullptr, &descriptorPool);
+
+        return descriptorPool;
+    }
+
+    VkDescriptorSet AllocateDescriptorSet(VkDevice device, VkDescriptorPool descriptorPool, const std::vector<VkDescriptorSetLayout>& setLayout)
+    {
+
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        descriptorSetAllocateInfo.descriptorPool = descriptorPool;
+        descriptorSetAllocateInfo.descriptorSetCount = setLayout.size();
+        descriptorSetAllocateInfo.pSetLayouts = setLayout.data();
+
+        VkDescriptorSet descriptorSet;
+        vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet);
+
+        return descriptorSet;
+    }
+
+    void UpdateUniformBufferDescriptorSet(VkDevice device, VkDescriptorSet descriptorSet, const Buffer& buffer)
+    {
+        VkDescriptorBufferInfo bufferInfo = {};
+        bufferInfo.buffer = buffer.handle;
+        bufferInfo.offset = 0;
+        bufferInfo.range = buffer.bufferSize;
+
+        VkWriteDescriptorSet descriptorWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite.pBufferInfo = &bufferInfo;
+        descriptorWrite.dstSet = descriptorSet;
+        descriptorWrite.dstBinding = 0;
+
+        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+    }
+
+    VkVertexInputAttributeDescription CreateAttributeDescription(uint32_t binding, uint32_t location, uint32_t offset, VkFormat format) 
+    {
+        VkVertexInputAttributeDescription attributeDescription = {};
+        attributeDescription.binding = binding;
+        attributeDescription.format = format;
+        attributeDescription.location = location;
+        attributeDescription.offset = offset;
+
+        return attributeDescription;
+    }
+
+    VkVertexInputBindingDescription CreateBindingDescription(uint32_t binding, VkVertexInputRate inputRate, uint32_t stride) 
+    {
+        VkVertexInputBindingDescription inputBindingDescriptor = {};
+        inputBindingDescriptor.binding = binding;
+        inputBindingDescriptor.inputRate = inputRate;
+        inputBindingDescriptor.stride = stride;
+
+        return inputBindingDescriptor;
+    }
+
+    VkDescriptorSetLayoutBinding CreateSetLayoutBinding(uint32_t binding, uint32_t descriptorCount, VkDescriptorType descriptorType, VkShaderStageFlags shaderStage) 
+    {
+        VkDescriptorSetLayoutBinding layoutBinding = {};    
+        layoutBinding.binding = binding;
+        layoutBinding.descriptorCount = descriptorCount;
+        layoutBinding.descriptorType = descriptorType;
+        layoutBinding.stageFlags = shaderStage;
+
+        return layoutBinding;
+    }
+
+    VkDescriptorPoolSize CreatePoolSize(uint32_t descriptorCount, VkDescriptorType descriptorType) 
+    {
+        VkDescriptorPoolSize poolSize;
+
+        poolSize.descriptorCount = descriptorCount;
+        poolSize.type = descriptorType;
+
+        return poolSize;
+    }
+
+    Image CreateImage(VkPhysicalDevice physicalDevice, VkDevice device, int width, int height, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlagBits samplerCount) 
+    {
+
+        Image image;
+        
+        VkImageCreateInfo imageCreateInfo = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+        imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageCreateInfo.arrayLayers = 1;
+        imageCreateInfo.extent.width = width;
+        imageCreateInfo.extent.height = height;
+        imageCreateInfo.extent.depth = 1;
+        imageCreateInfo.format = format;;
+        imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageCreateInfo.mipLevels = 1;
+        imageCreateInfo.samples = samplerCount;
+        imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageCreateInfo.usage = usage;
+
+        vkCreateImage(device, &imageCreateInfo, nullptr, &image.handle);
+
+        VkMemoryRequirements requirements;
+        vkGetImageMemoryRequirements(device, image.handle, &requirements);
+
+        VkMemoryAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+        allocateInfo.allocationSize = requirements.size;
+        allocateInfo.memoryTypeIndex = vkn::GetMemoryTypeIndex(physicalDevice, requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        vkAllocateMemory(device, &allocateInfo, nullptr, &image.memory);
+
+        vkBindImageMemory(device, image.handle, image.memory, 0);
+
+
+        VkImageViewCreateInfo imageViewCreateInfo = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+        imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+        imageViewCreateInfo.subresourceRange.levelCount = 1;
+        imageViewCreateInfo.subresourceRange.layerCount = 1;
+        imageViewCreateInfo.image = image.handle;
+        
+        vkCreateImageView(device, &imageViewCreateInfo, nullptr, &image.imageView);
+
+
+        image.format = format;
+        image.width = width;
+        image.height = height;
+
+        return image;
+    }
+
+    VkSampler CreateSampler(VkDevice device, VkFilter minFilter, VkFilter magFilter, VkSamplerAddressMode addressMode) 
+    {
+
+        VkSamplerCreateInfo samplerCreateInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        samplerCreateInfo.addressModeU = addressMode;
+        samplerCreateInfo.addressModeV = addressMode;
+        samplerCreateInfo.addressModeW = addressMode;
+        samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerCreateInfo.anisotropyEnable = VK_FALSE;
+        samplerCreateInfo.compareEnable = VK_FALSE;
+        samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        samplerCreateInfo.magFilter = magFilter;
+        samplerCreateInfo.minFilter = minFilter;
+        samplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+        samplerCreateInfo.maxLod = 1;
+        samplerCreateInfo.minLod = 1;
+        samplerCreateInfo.mipLodBias = 1;
+        samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+
+        VkSampler sampler;
+        vkCreateSampler(device, &samplerCreateInfo, nullptr, &sampler);
+
+
+        return sampler;
+    }
+
+    void ExecuteCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue, const std::vector<VkPipelineStageFlags>& waitStageMasks, VkFence fence, const std::vector<VkSemaphore>& waitSemaphores, const std::vector<VkSemaphore>& signalSemaphores) 
+    {
+        VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+        submitInfo.pCommandBuffers = &commandBuffer;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.waitSemaphoreCount = waitSemaphores.size();
+        submitInfo.pWaitSemaphores = waitSemaphores.data();
+        submitInfo.signalSemaphoreCount = signalSemaphores.size();
+        submitInfo.pSignalSemaphores = signalSemaphores.data();
+        submitInfo.pWaitDstStageMask = waitStageMasks.data();
+
+        VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, fence));    
+    }
+
+    void BeginSingleTimeCommandBufferRecording(VkCommandBuffer commandBuffer) 
+    {
+        VkCommandBufferBeginInfo beginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    }
+
+    void EndAndExecuteSingleTimeCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue) 
+    {
+        vkEndCommandBuffer(commandBuffer);
+
+        VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer;
+
+        vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+
+        vkQueueWaitIdle(queue);
+    }
+
+    void TransitionLayout(VkDevice device, VkCommandPool commandPool, VkQueue graphicQueue, VkImage image, VkImageAspectFlags aspectMask, VkImageLayout oldLayout, VkImageLayout newLayout, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) 
+    {
+        VkCommandBuffer commandBuffer = vkn::AllocateCommandBuffer(device, commandPool);
+
+        vkn::BeginSingleTimeCommandBufferRecording(commandBuffer);
+
+
+        VkImageMemoryBarrier imageMemoryBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        imageMemoryBarrier.image = image;
+        imageMemoryBarrier.oldLayout = oldLayout;
+        imageMemoryBarrier.newLayout = newLayout;
+        imageMemoryBarrier.srcAccessMask = srcAccessMask;
+        imageMemoryBarrier.dstAccessMask = dstAccessMask;
+        imageMemoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
+        imageMemoryBarrier.subresourceRange.baseMipLevel = 0;
+        imageMemoryBarrier.subresourceRange.layerCount = 1;
+        imageMemoryBarrier.subresourceRange.levelCount = 1;
+
+        vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+
+        vkn::EndAndExecuteSingleTimeCommandBuffer(commandBuffer, graphicQueue);
+    
+    }
+
+    VulkanContext CreateVulkanContext(GLFWwindow* window) 
+    {
+        VulkanContext context;
+
+        context.instance = vkn::CreateInstance();
+        context.physicalDevice = vkn::GetPhysicalDevice(context.instance);
+        context.surface = vkn::CreateSurface(context.instance, window);
+        context.queueIndices = vkn::GetQueueIndices(context.physicalDevice, context.surface);
+        context.device = vkn::CreateDevice(context.physicalDevice, context.queueIndices);
+        context.queues = vkn::GetDeviceQueue(context.device, context.queueIndices);
+        context.renderPass = vkn::CreateRenderPass(context.device);
+        context.swapchain = vkn::CreateSwapchain(context.physicalDevice, context.device, context.surface, context.renderPass, window);
+        context.commandPool = vkn::CreateCommandPool(context.device);    
+
+        return context;
+    }
 }

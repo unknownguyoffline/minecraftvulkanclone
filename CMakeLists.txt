@@ -14,6 +14,7 @@ find_package(Vulkan REQUIRED)
 
 file(GLOB source_files 
     "${PROJECT_SOURCE_DIR}/Sources/*.cpp"
+    "${PROJECT_SOURCE_DIR}/Sources/Vulkan/*.cpp"
 )
 
 add_subdirectory(Libraries)
