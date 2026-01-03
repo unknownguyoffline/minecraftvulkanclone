@@ -4,6 +4,11 @@
 
 namespace vkn
 {
+    VkSampleCountFlagBits GetSampleCount() 
+    {
+        return VK_SAMPLE_COUNT_8_BIT;    
+    }
+
     VkFormat GetDisplayFormat()
     {
         return VK_FORMAT_B8G8R8A8_SRGB;
@@ -200,6 +205,10 @@ namespace vkn
         createInfo.queueCreateInfoCount = 1;
         createInfo.pQueueCreateInfos = &graphicQueueCreateInfo;
 
+        VkPhysicalDeviceFeatures enableFeatures = {};
+        enableFeatures.samplerAnisotropy = VK_TRUE;
+        createInfo.pEnabledFeatures = &enableFeatures;
+
         VkDevice device;
         vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
         return device;
@@ -218,22 +227,33 @@ namespace vkn
         VkAttachmentDescription colorAttachment = {};
         colorAttachment.format = GetDisplayFormat();
         colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        colorAttachment.samples = GetSampleCount();
 
         VkAttachmentDescription depthAttachment = {};
         depthAttachment.format = VK_FORMAT_D32_SFLOAT;
         depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        depthAttachment.samples = GetSampleCount();
+
+        VkAttachmentDescription colorAttachmentResolve = {};
+        colorAttachmentResolve.format = GetDisplayFormat();
+        colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+        colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        
 
         VkAttachmentReference colorAttachmentRef = {};
         colorAttachmentRef.attachment = 0;
@@ -243,23 +263,28 @@ namespace vkn
         depthAttachmentRef.attachment = 1;
         depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+        VkAttachmentReference colorAttachmentResolveRef = {};
+        colorAttachmentResolveRef.attachment = 2;
+        colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
         VkSubpassDescription subpassDescription = {};
         subpassDescription.colorAttachmentCount = 1;
         subpassDescription.pColorAttachments = &colorAttachmentRef;
         subpassDescription.pDepthStencilAttachment = &depthAttachmentRef;
+        subpassDescription.pResolveAttachments = &colorAttachmentResolveRef;
 
         VkSubpassDependency subpassDependencies = {};
         subpassDependencies.srcSubpass = VK_SUBPASS_EXTERNAL;
         subpassDependencies.dstSubpass = 0;
         subpassDependencies.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         subpassDependencies.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        subpassDependencies.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        subpassDependencies.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         subpassDependencies.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-        VkAttachmentDescription attachments[] = {colorAttachment, depthAttachment};
+        VkAttachmentDescription attachments[] = {colorAttachment, depthAttachment, colorAttachmentResolve};
 
         VkRenderPassCreateInfo createInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-        createInfo.attachmentCount = 2;
+        createInfo.attachmentCount = 3;
         createInfo.pAttachments = attachments;
         createInfo.subpassCount = 1;
         createInfo.pSubpasses = &subpassDescription;
@@ -312,7 +337,7 @@ namespace vkn
         imageViewCreateInfo.subresourceRange.layerCount = 1;
 
         VkFramebufferCreateInfo framebufferCreateInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-        framebufferCreateInfo.attachmentCount = 2;
+        framebufferCreateInfo.attachmentCount = 3;
         framebufferCreateInfo.width = GetDisplayExtent(window).width;
         framebufferCreateInfo.height = GetDisplayExtent(window).height;
         framebufferCreateInfo.layers = 1;
@@ -333,7 +358,7 @@ namespace vkn
         depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
         depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         depthImageCreateInfo.mipLevels = 1;
-        depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        depthImageCreateInfo.samples = GetSampleCount();
         depthImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -370,6 +395,48 @@ namespace vkn
 
 
 
+        VkImageCreateInfo colorImageCreateInfo = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+        colorImageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+        colorImageCreateInfo.arrayLayers = 1;
+        colorImageCreateInfo.extent.width = swapchain.extent.width;
+        colorImageCreateInfo.extent.height = swapchain.extent.height;
+        colorImageCreateInfo.extent.depth = 1;
+        colorImageCreateInfo.format = GetDisplayFormat();
+        colorImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorImageCreateInfo.mipLevels = 1;
+        colorImageCreateInfo.samples = GetSampleCount();
+        colorImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        colorImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        colorImageCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+        vkCreateImage(device, &colorImageCreateInfo, nullptr, &swapchain.colorImage);
+
+        vkGetImageMemoryRequirements(device, swapchain.colorImage, &requirements);
+
+        allocateInfo.allocationSize = requirements.size;
+        allocateInfo.memoryTypeIndex = GetMemoryTypeIndex(physicalDevice, requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        vkAllocateMemory(device, &allocateInfo, nullptr, &swapchain.colorImageMemory);
+
+        vkBindImageMemory(device, swapchain.colorImage, swapchain.colorImageMemory, 0);
+
+
+        VkImageViewCreateInfo colorImageViewCreateInfo = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        colorImageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        colorImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        colorImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        colorImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        colorImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        colorImageViewCreateInfo.format = GetDisplayFormat();
+        colorImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        colorImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        colorImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+        colorImageViewCreateInfo.subresourceRange.levelCount = 1;
+        colorImageViewCreateInfo.subresourceRange.layerCount = 1;
+        colorImageViewCreateInfo.image = swapchain.colorImage;
+
+        vkCreateImageView(device, &colorImageViewCreateInfo, nullptr, &swapchain.colorImageView);
+
 
 
 
@@ -379,7 +446,7 @@ namespace vkn
             VK_CHECK(vkCreateImageView(device, &imageViewCreateInfo, nullptr, &swapchain.imageViews[i]));
 
 
-            VkImageView attachments[] = {swapchain.imageViews[i], swapchain.depthImageView};
+            VkImageView attachments[] = {swapchain.colorImageView, swapchain.depthImageView, swapchain.imageViews[i]};
             framebufferCreateInfo.pAttachments = attachments;
             VK_CHECK(vkCreateFramebuffer(device, &framebufferCreateInfo, nullptr, &swapchain.framebuffers[i]));
         }
@@ -495,8 +562,8 @@ namespace vkn
         rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
 
         VkPipelineMultisampleStateCreateInfo multisampleStateCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-        multisampleStateCreateInfo.sampleShadingEnable = VK_FALSE;
-        multisampleStateCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        // multisampleStateCreateInfo.sampleShadingEnable = VK_TRUE;
+        multisampleStateCreateInfo.rasterizationSamples = GetSampleCount();
 
         VkRect2D scissor;
         scissor.extent.width = viewport.width;
@@ -745,6 +812,7 @@ namespace vkn
         imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         imageCreateInfo.usage = usage;
+        
 
         vkCreateImage(device, &imageCreateInfo, nullptr, &image.handle);
 
@@ -792,7 +860,8 @@ namespace vkn
         samplerCreateInfo.addressModeV = addressMode;
         samplerCreateInfo.addressModeW = addressMode;
         samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        samplerCreateInfo.anisotropyEnable = VK_FALSE;
+        samplerCreateInfo.anisotropyEnable = VK_TRUE;
+        samplerCreateInfo.maxAnisotropy = 16;
         samplerCreateInfo.compareEnable = VK_FALSE;
         samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
         samplerCreateInfo.magFilter = magFilter;

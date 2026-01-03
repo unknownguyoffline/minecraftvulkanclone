@@ -194,13 +194,19 @@ void Game::Initialize()
     viewport.maxDepth = 1.f;
 
     VkVertexInputBindingDescription bindingDescription = vkn::CreateBindingDescription(0, VK_VERTEX_INPUT_RATE_VERTEX, sizeof(Vertex));
+    VkVertexInputBindingDescription instanceBindingDescription = vkn::CreateBindingDescription(1, VK_VERTEX_INPUT_RATE_INSTANCE, sizeof(glm::mat4));
 
     VkVertexInputAttributeDescription positionAttributeDescription = vkn::CreateAttributeDescription(0, 0, offsetof(Vertex, position), VK_FORMAT_R32G32B32_SFLOAT);
     VkVertexInputAttributeDescription normalAttributeDescription = vkn::CreateAttributeDescription(0, 1, offsetof(Vertex, normal), VK_FORMAT_R32G32B32_SFLOAT);
     VkVertexInputAttributeDescription uvAttributeDescription = vkn::CreateAttributeDescription(0, 2, offsetof(Vertex, uv), VK_FORMAT_R32G32_SFLOAT);
 
+    VkVertexInputAttributeDescription instanceAttributeDescription0 = vkn::CreateAttributeDescription(1, 3, sizeof(glm::vec4) * 0, VK_FORMAT_R32G32B32A32_SFLOAT);
+    VkVertexInputAttributeDescription instanceAttributeDescription1 = vkn::CreateAttributeDescription(1, 4, sizeof(glm::vec4) * 1, VK_FORMAT_R32G32B32A32_SFLOAT);
+    VkVertexInputAttributeDescription instanceAttributeDescription2 = vkn::CreateAttributeDescription(1, 5, sizeof(glm::vec4) * 2, VK_FORMAT_R32G32B32A32_SFLOAT);
+    VkVertexInputAttributeDescription instanceAttributeDescription3 = vkn::CreateAttributeDescription(1, 6, sizeof(glm::vec4) * 3, VK_FORMAT_R32G32B32A32_SFLOAT);
 
-    VkPipeline graphicPipeline = vkn::CreateGraphicsPipeline(mVulkanContext.device, pipelineLayout, mVulkanContext.renderPass, vertexShaderModule, fragmentShaderModule, viewport, {bindingDescription}, {positionAttributeDescription, normalAttributeDescription, uvAttributeDescription});
+
+    VkPipeline graphicPipeline = vkn::CreateGraphicsPipeline(mVulkanContext.device, pipelineLayout, mVulkanContext.renderPass, vertexShaderModule, fragmentShaderModule, viewport, {bindingDescription, instanceBindingDescription}, {positionAttributeDescription, normalAttributeDescription, uvAttributeDescription, instanceAttributeDescription0, instanceAttributeDescription1, instanceAttributeDescription2, instanceAttributeDescription3});
 
 
 
@@ -240,15 +246,8 @@ void Game::Initialize()
         descriptorSet[i] = vkn::AllocateDescriptorSet(mVulkanContext.device, descriptorPool, {uniformSetLayout});
         samplerDescriptorSet[i] = vkn::AllocateDescriptorSet(mVulkanContext.device, descriptorPool, {samplerSetLayout});
     }
-    
-    
 
-    
-    
     Camera camera;
-
-
-
 
     vkn::VertexBuffer vertexBuffer(mVulkanContext);
     vertexBuffer.Create(sizeof(Vertex) * vertices.size());
@@ -262,7 +261,50 @@ void Game::Initialize()
     vkn::Texture texture;
     texture.CreateFromFile(mVulkanContext, "Textures/Kenney-Prototype-Textures/Dark/texture_13.png");
 
+    std::vector<glm::mat4> models;
+    
+    int side = 10;
+    int x = 0, z = 0;
+    for(int i = 0; i < side * side; i++)
+    {
+        glm::mat4 model = glm::mat4(1.f);
+        model = glm::translate(model, glm::vec3(x, 0, z));
+        models.push_back(model);
 
+        x++;
+        if(x >= 10)
+        {
+            x = 0;
+            z++;
+        }
+    }
+
+    for(int i = 0; i < 9; i++)
+    {
+        glm::mat4 model = glm::mat4(1.f);
+        model = glm::translate(model, glm::vec3(i + 1, 1, 0));
+        models.push_back(model);
+        model = glm::mat4(1.f);
+        model = glm::translate(model, glm::vec3(i + 1, 2, 0));
+        models.push_back(model);
+    }
+
+
+    for(int i = 0; i < 9; i++)
+    {
+        glm::mat4 model = glm::mat4(1.f);
+        model = glm::translate(model, glm::vec3(9, 1, i + 1));
+        models.push_back(model);
+        model = glm::mat4(1.f);
+        model = glm::translate(model, glm::vec3(9, 2, i + 1));
+        models.push_back(model);
+    }
+
+
+
+    vkn::VertexBuffer instanceVertexBuffer(mVulkanContext);
+    instanceVertexBuffer.Create(sizeof(glm::mat4) * models.size());
+    instanceVertexBuffer.SetData(sizeof(glm::mat4) * models.size(), models.data());
 
 
     while(mWindow.GetInput().window.close == false)
@@ -341,13 +383,15 @@ void Game::Initialize()
         vkCmdBindDescriptorSets(currentFrameData.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, des, 0, nullptr);
 
 
-        VkDeviceSize offset = 0;
+        VkDeviceSize offsets[] = {0, 0};
 
-        vkCmdBindVertexBuffers(currentFrameData.commandBuffer, 0, 1, &vertexBuffer.GetBuffer().handle, &offset);
+        VkBuffer vertexBuffers[] = {vertexBuffer.GetBuffer().handle, instanceVertexBuffer.GetBuffer().handle};
+
+        vkCmdBindVertexBuffers(currentFrameData.commandBuffer, 0, 2, vertexBuffers, offsets);
 
         vkCmdBindIndexBuffer(currentFrameData.commandBuffer, indexBuffer.GetBuffer().handle, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdDrawIndexed(currentFrameData.commandBuffer, 36, 1, 0, 0, 0);
+        vkCmdDrawIndexed(currentFrameData.commandBuffer, 36, models.size(), 0, 0, 0);
 
         vkCmdEndRenderPass(currentFrameData.commandBuffer);
 
@@ -356,17 +400,6 @@ void Game::Initialize()
         VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
         vkn::ExecuteCommandBuffer(currentFrameData.commandBuffer, mVulkanContext.queues.graphic,  {waitStageMask}, currentFrameData.renderedFence, {currentFrameData.imageAcquiredSemaphore}, {renderingFinished[imageIndex]});
-
-        // VkSubmitInfo submitInfo = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-        // submitInfo.pCommandBuffers = &currentFrameData.commandBuffer;
-        // submitInfo.commandBufferCount = 1;
-        // submitInfo.waitSemaphoreCount = 1;
-        // submitInfo.pWaitSemaphores = &currentFrameData.imageAcquiredSemaphore;
-        // submitInfo.pSignalSemaphores = &renderingFinished[imageIndex];
-        // submitInfo.signalSemaphoreCount = 1;
-        // submitInfo.pWaitDstStageMask = &waitStageMask;
-
-        // VK_CHECK(vkQueueSubmit(mVulkanContext.queues.graphic, 1, &submitInfo, currentFrameData.renderedFence));
 
         VkPresentInfoKHR presentInfo = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
         presentInfo.pImageIndices = &imageIndex;

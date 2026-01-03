@@ -8,7 +8,7 @@
 namespace vkn
 {
     
-
+    VkSampleCountFlagBits GetSampleCount();
     VkFormat GetDisplayFormat();
     VkInstance CreateInstance();
     VkPhysicalDevice GetPhysicalDevice(VkInstance instance);

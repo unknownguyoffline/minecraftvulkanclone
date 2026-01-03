@@ -20,6 +20,16 @@ namespace vkn
         VkQueue compute = VK_NULL_HANDLE;
     };
 
+
+    struct Image
+    {
+        VkImage handle;
+        VkImageView imageView;
+        VkDeviceMemory memory;
+        int width, height;
+        VkFormat format;
+    };
+
     struct Swapchain
     {
         VkSwapchainKHR handle = VK_NULL_HANDLE;
@@ -32,6 +42,12 @@ namespace vkn
         VkImage depthImage;
         VkDeviceMemory depthImageMemory;
         VkImageView depthImageView;
+
+        VkImage colorImage;
+        VkDeviceMemory colorImageMemory;
+        VkImageView colorImageView;
+
+        Image normalImage;
     };
 
     struct Buffer
@@ -59,12 +75,5 @@ namespace vkn
         VkRenderPass renderPass = VK_NULL_HANDLE;
     };
 
-    struct Image
-    {
-        VkImage handle;
-        VkImageView imageView;
-        VkDeviceMemory memory;
-        int width, height;
-        VkFormat format;
-    };
+    
 }
